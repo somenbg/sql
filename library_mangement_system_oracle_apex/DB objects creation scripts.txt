@@ -1,0 +1,204 @@
+##Create Authors Table
+
+CREATE TABLE  "AUTHORS" 
+   (	"AUTHOR_ID" NUMBER(*,0) NOT NULL ENABLE, 
+	"NAME" VARCHAR2(100), 
+	 CONSTRAINT "AUTHORS_PK" PRIMARY KEY ("AUTHOR_ID")
+  USING INDEX  ENABLE
+   )
+   
+
+______________________________________________________________________________________________________________________________________________________________________________________   
+
+
+##Create Book Table
+
+CREATE TABLE  "BOOK" 
+   (	"ISBN" NUMBER(*,0) NOT NULL ENABLE, 
+	"TITLE" VARCHAR2(255), 
+	 CONSTRAINT "BOOK_PK" PRIMARY KEY ("ISBN")
+  USING INDEX  ENABLE
+   )
+   
+
+______________________________________________________________________________________________________________________________________________________________________________________   
+
+## BOOK_AUTHORS Table Creation
+
+
+CREATE TABLE  "BOOK_AUTHORS" 
+   (	"AUTHOR_ID" NUMBER(*,0) NOT NULL ENABLE, 
+	"ISBN" NUMBER(*,0) NOT NULL ENABLE, 
+	 CONSTRAINT "BOOK_AUTHORS_PK" PRIMARY KEY ("AUTHOR_ID", "ISBN")
+  USING INDEX  ENABLE
+   )
+/
+ALTER TABLE  "BOOK_AUTHORS" ADD CONSTRAINT "BOOK_AUTHORS_FK1" FOREIGN KEY ("AUTHOR_ID")
+	  REFERENCES  "AUTHORS" ("AUTHOR_ID") ENABLE
+/
+ALTER TABLE  "BOOK_AUTHORS" ADD CONSTRAINT "BOOK_AUTHORS_FK2" FOREIGN KEY ("ISBN")
+	  REFERENCES  "BOOK" ("ISBN") ENABLE
+_____________________________________________________________________________________________________________________________________________________________________________________  
+## BOOK_COPIES_TEMP Table Creation
+
+
+CREATE TABLE  "BOOK_COPIES_TEMP" 
+   (	"BOOK_ID" VARCHAR2(20) NOT NULL ENABLE, 
+	"ISBN" NUMBER(*,0) NOT NULL ENABLE, 
+	"BRANCH_ID" NUMBER(*,0) NOT NULL ENABLE, 
+	"COPIES" NUMBER(*,0), 
+	 CONSTRAINT "BOOK_COPIES_TEMP_PK" PRIMARY KEY ("BOOK_ID", "BRANCH_ID")
+  USING INDEX  ENABLE
+   )
+/
+ALTER TABLE  "BOOK_COPIES_TEMP" ADD CONSTRAINT "BOOK_COPIES_TEMP_FK1" FOREIGN KEY ("ISBN")
+	  REFERENCES  "BOOK" ("ISBN") ENABLE
+/
+ALTER TABLE  "BOOK_COPIES_TEMP" ADD CONSTRAINT "BOOK_COPIES_TEMP_FK2" FOREIGN KEY ("BRANCH_ID")
+	  REFERENCES  "LIBRARY_BRANCH" ("BRANCH_ID") ENABLE
+
+_____________________________________________________________________________________________________________________________________________________________________________________  
+
+## BOOK_LOANS Table Creation
+
+
+
+CREATE TABLE  "BOOK_LOANS" 
+   (	"LOAN_ID" NUMBER(*,0) NOT NULL ENABLE, 
+	"BOOK_ID" VARCHAR2(20) CONSTRAINT "BOOK_NULL" NOT NULL ENABLE, 
+	"CARD_NO" VARCHAR2(20) CONSTRAINT "CARD_NULL" NOT NULL ENABLE, 
+	"BRANCH_ID" NUMBER CONSTRAINT "BRANCH_NULL" NOT NULL ENABLE, 
+	"DATE_OUT" DATE CONSTRAINT "OUT_NULL" NOT NULL DISABLE, 
+	"DUE_DATE" DATE CONSTRAINT "DUE_NULL" NOT NULL DISABLE, 
+	"DATE_IN" DATE, 
+	 CONSTRAINT "BOOK_LOANS_PK" PRIMARY KEY ("LOAN_ID")
+  USING INDEX  ENABLE
+   )
+/
+ALTER TABLE  "BOOK_LOANS" ADD CONSTRAINT "BOOK_LOANS_FK1" FOREIGN KEY ("CARD_NO")
+	  REFERENCES  "BORROWERS" ("BORROWER_ID") ENABLE
+/
+ALTER TABLE  "BOOK_LOANS" ADD CONSTRAINT "BOOK_LOANS_FK2" FOREIGN KEY ("BOOK_ID", "BRANCH_ID")
+	  REFERENCES  "BOOK_COPIES_TEMP" ("BOOK_ID", "BRANCH_ID") ENABLE
+/
+
+CREATE OR REPLACE EDITIONABLE TRIGGER  "BOOK_LOANS_T1" 
+AFTER
+update on "BOOK_LOANS"
+for each row
+begin
+BEGIN 
+
+Update book_copies_temp set copies=copies+1 where book_id=(select book_id from book_loans where date_in=:new.date_in);
+
+end;
+end;
+
+/
+ALTER TRIGGER  "BOOK_LOANS_T1" DISABLE
+/
+
+CREATE OR REPLACE EDITIONABLE TRIGGER  "BOOK_LOANS_T2" 
+BEFORE
+insert on "BOOK_LOANS"
+for each row
+
+DECLARE
+coun number;
+
+begin
+    select count(loan_id) into coun from book_loans;
+    if (coun=3) then
+        raise_application_error(20000, 'Sorry, more than 3 borrows.');
+    end if;
+
+end;
+
+/
+ALTER TRIGGER  "BOOK_LOANS_T2" ENABLE
+/
+
+
+
+
+_____________________________________________________________________________________________________________________________________________________________________________________  
+
+## BBORROWERS Table Creation
+
+CREATE TABLE  "BORROWERS" 
+   (	"BORROWER_ID" VARCHAR2(26) NOT NULL ENABLE, 
+	"SSN" VARCHAR2(256) NOT NULL ENABLE, 
+	"FIRST_NAME" VARCHAR2(256) NOT NULL ENABLE, 
+	"LAST_NAME" VARCHAR2(256) NOT NULL ENABLE, 
+	"EMAIL" VARCHAR2(1024), 
+	"ADDRESS" VARCHAR2(256) CONSTRAINT "BORROW_NULL" NOT NULL ENABLE, 
+	"CITY" VARCHAR2(256), 
+	"STATE" VARCHAR2(256), 
+	"PHONE" VARCHAR2(256), 
+	 CONSTRAINT "BORROWERS_PK" PRIMARY KEY ("BORROWER_ID")
+  USING INDEX  ENABLE, 
+	 CONSTRAINT "BORROWERS_U1" UNIQUE ("SSN")
+  USING INDEX  ENABLE
+   )
+/
+
+CREATE OR REPLACE EDITIONABLE TRIGGER  "BORROWERS_T1" 
+BEFORE
+insert or update on "BORROWERS"
+for each row
+begin
+BEGIN
+  SELECT replace('ID' || to_char(borrowid.NEXTVAL,'000099'),' ','')
+  INTO   :new.borrower_id
+  FROM   dual;
+END;
+end;
+
+/
+ALTER TRIGGER  "BORROWERS_T1" ENABLE
+/
+
+___________________________________________________________________________________________________________________________________________________________________________________  
+
+## FINES Table Creation
+
+CREATE TABLE  "FINES" 
+   (	"LOAN_ID" NUMBER(*,0) NOT NULL ENABLE, 
+	"FINE_AMT" FLOAT(126), 
+	"PAID" VARCHAR2(10), 
+	 CONSTRAINT "PAID_CHECK" CHECK (paid IN ('YES', 'NO')) ENABLE
+   )
+/
+ALTER TABLE  "FINES" ADD CONSTRAINT "FINES_FK1" FOREIGN KEY ("LOAN_ID")
+	  REFERENCES  "BOOK_LOANS" ("LOAN_ID") ENABLE
+/
+
+_____________________________________________________________________________________________________________________________________________________________________________________  
+
+## FINES_DATA Table Creation
+
+CREATE TABLE  "FINES_DATA" 
+   (	"CARD_NO" VARCHAR2(20), 
+	"NAME" VARCHAR2(513), 
+	"TOTAL FINE DUE" NUMBER, 
+	"PAID" VARCHAR2(10), 
+	 CONSTRAINT "PAID_CHECK1" CHECK (paid IN ('YES', 'NO')) ENABLE
+   )
+/
+
+
+
+_____________________________________________________________________________________________________________________________________________________________________________________  
+
+## LIBRARY_BRANCH Table Creation
+
+CREATE TABLE  "LIBRARY_BRANCH" 
+   (	"BRANCH_ID" NUMBER(*,0) NOT NULL ENABLE, 
+	"BRANCH_NAME" VARCHAR2(26), 
+	"ADDRESS" VARCHAR2(128), 
+	 CONSTRAINT "LIBRARY_BRANCH_PK" PRIMARY KEY ("BRANCH_ID")
+  USING INDEX  ENABLE
+   )
+/
+_____________________________________________________________________________________________________________________________________________________________________________________  
+
